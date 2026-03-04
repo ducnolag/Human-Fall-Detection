@@ -184,7 +184,7 @@ class FallDetectorMulti:
         return (model.half().to(device) if torch.cuda.is_available() else model), device
 
     def get_pose(self, image):
-        image = letterbox(image, 960, stride=64, auto=True)[0]
+        image = letterbox(image, 640, stride=64, auto=True)[0]
         tensor = transforms.ToTensor()(image).unsqueeze(0)
         if torch.cuda.is_available():
             tensor = tensor.half().to(self.device)
@@ -349,3 +349,64 @@ class FallDetectorMulti:
 
     def handle_frame(self, frame, prev_time=None, writer=None):
         return self.process_frame(frame, prev_time, writer)
+    
+    def handle_frame_with_detection(self, frame, prev_time=None, writer=None):
+        """
+        Process frame and return whether a fall was detected
+        Returns: (_image, new_time, fall_detected)
+        """
+        people, processed_frame = self.get_pose(frame)
+        _image = cv2.cvtColor(processed_frame, cv2.COLOR_RGB2BGR)
+        assigned_ids = set()
+        results = []
+        fall_detected_in_frame = False
+
+        for pose in people:
+            tid = self.match_pose_to_tracker(pose, self.trackers, assigned_ids)
+            if tid is None:
+                tid = str(self.next_id)
+                self.next_id += 1
+                self.trackers[tid] = PersonFallTracker(
+                    self.window_size,
+                    self.fps,
+                    self.v_thresh,
+                    self.ar_thresh,
+                    self.dy_thresh,
+                )
+            self.trackers[tid].add_pose(pose)
+            self.trackers[tid].last_update = time.time()
+
+            tag = debug = bbox = None
+            v = dy = ar = None
+
+            if self.trackers[tid].is_ready():
+                is_fall, bbox, debug, tag = self.trackers[tid].check_fall()
+                p1, p2 = (
+                    self.trackers[tid].pose_window[0],
+                    self.trackers[tid].pose_window[-1],
+                )
+                v, dy = self.trackers[tid].compute_velocity(p1, p2)
+                ar = self.trackers[tid].compute_ar_delta(p1, p2)
+
+                if is_fall and bbox:
+                    fall_detected_in_frame = True
+                    x1, y1, x2, y2 = map(int, bbox)
+                    cv2.rectangle(_image, (x1, y1), (x2, y2), (255, 0, 0), 4)
+                    cv2.putText(
+                        _image, "FALL DETECTED", (x1, y1 - 10), 0, 0.8, (0, 0, 255), 2
+                    )
+
+            cx, cy = int(pose[2]), int(pose[3])
+            results.append((tid, pose, tag, debug, bbox, v, dy, ar))
+
+        _image = self.draw_debug_overlay(_image, results)
+
+        if prev_time is not None:
+            _image, new_time = self.draw_fps(_image, prev_time)
+            if writer:
+                writer.write(_image)
+            return _image, new_time, fall_detected_in_frame
+        else:
+            if writer:
+                writer.write(_image)
+            return _image, None, fall_detected_in_frame
