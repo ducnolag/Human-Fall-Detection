@@ -9,7 +9,7 @@ from config import FPS, WINDOW_SIZE, V_THRESH, DY_THRESH, ASPECT_RATIO_THRESH, A
 
 
 # Backend server URL - change this to match your backend IP
-BACKEND_URL = "http://192.168.1.27:3000/api/fall-detection/webhook"
+BACKEND_URL = "https://be-dev-champ.onrender.com/api/fall-detection/webhook"
 
 
 def send_fall_alert_http(frame, camera_id="CAM_01", location="PHÒNG KHÁCH"):
