@@ -31,8 +31,8 @@ def send_fall_alert_http(frame, camera_id="CAM_01", location="PHÒNG KHÁCH"):
     }
     
     try:
-        # Send HTTP POST to backend
-        response = requests.post(BACKEND_URL, json=alert, timeout=2)
+        # Send HTTP POST to backend (increased timeout for base64 image payload)
+        response = requests.post(BACKEND_URL, json=alert, timeout=10)
         if response.status_code == 200:
             print(f"[✓] Alert sent successfully at {time.strftime('%H:%M:%S')}")
         else:
